@@ -201,6 +201,7 @@ qboolean Pickup_AncientHead (edict_t *ent, edict_t *other)
 
 qboolean Pickup_Bandolier (edict_t *ent, edict_t *other)
 {
+	/*
 	gitem_t	*item;
 	int		index;
 
@@ -230,13 +231,13 @@ qboolean Pickup_Bandolier (edict_t *ent, edict_t *other)
 		if (other->client->pers.inventory[index] > other->client->pers.max_shells)
 			other->client->pers.inventory[index] = other->client->pers.max_shells;
 	}
-
+	*/
+	other->client->pers.doublejump = true;
 	if (!(ent->spawnflags & DROPPED_ITEM) && (deathmatch->value))
 		SetRespawn (ent, ent->item->quantity);
 
 	return true;
 }
-
 qboolean Pickup_Pack (edict_t *ent, edict_t *other)
 {
 	gitem_t	*item;
@@ -331,7 +332,7 @@ void Use_Quad (edict_t *ent, gitem_t *item)
 	}
 	else
 	{
-		timeout = 300;
+		timeout = 100;
 	}
 
 	if (ent->client->quad_framenum > level.framenum)
@@ -1397,13 +1398,14 @@ always owned, never in the world
 /* pickup */	"Grenades",
 /* width */		3,
 		5,
-		"grenades",
+		"Grenades",
 		IT_AMMO|IT_WEAPON,
 		WEAP_GRENADES,
 		NULL,
 		AMMO_GRENADES,
 /* precache */ "weapons/hgrent1a.wav weapons/hgrena1b.wav weapons/hgrenc1b.wav weapons/hgrenb1a.wav weapons/hgrenb2a.wav "
 	},
+
 
 /*QUAKED weapon_grenadelauncher (.3 .3 1) (-16 -16 -16) (16 16 16)
 */

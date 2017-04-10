@@ -1,6 +1,8 @@
 #include "g_local.h"
 #include "m_player.h"
 
+static qboolean	is_quad;
+
 void ClientUserinfoChanged (edict_t *ent, char *userinfo);
 
 void SP_misc_teleporter_dest (edict_t *ent);
@@ -26,7 +28,8 @@ static void SP_FixCoopSpots (edict_t *self)
 
 	while(1)
 	{
-		spot = G_Find(spot, FOFS(classname), "info_player_start");
+		spot = 
+			(spot, FOFS(classname), "info_player_start");
 		if (!spot)
 			return;
 		if (!spot->targetname)
@@ -274,7 +277,7 @@ void ClientObituary (edict_t *self, edict_t *inflictor, edict_t *attacker)
 				break;
 			default:
 				if (IsNeutral(self))
-					message = "killed itself";
+					message = "killed self... You STOOOPID idiot !";
 				else if (IsFemale(self))
 					message = "killed herself";
 				else
@@ -939,7 +942,6 @@ void CopyToBodyQue (edict_t *ent)
 	gi.unlinkentity (body);
 	body->s = ent->s;
 	body->s.number = body - g_edicts;
-
 	body->svflags = ent->svflags;
 	VectorCopy (ent->mins, body->mins);
 	VectorCopy (ent->maxs, body->maxs);
@@ -1645,14 +1647,31 @@ void ClientThink (edict_t *ent, usercmd_t *ucmd)
 			gi.sound(ent, CHAN_VOICE, gi.soundindex("*jump1.wav"), 1, ATTN_NORM, 0);
 			PlayerNoise(ent, ent->s.origin, PNOISE_SELF);
 		}
-
+		is_quad = (ent->client->quad_framenum > level.framenum);
+		if(is_quad)
+		{			
+			gi.centerprintf(ent, "You are cloaked");
+			ent->svflags = SVF_NOCLIENT;
+		}
+		else
+		{
+			ent->svflags = 0;
+		}
+		
 		ent->viewheight = pm.viewheight;
 		ent->waterlevel = pm.waterlevel;
 		ent->watertype = pm.watertype;
 		ent->groundentity = pm.groundentity;
 		if (pm.groundentity)
 			ent->groundentity_linkcount = pm.groundentity->linkcount;
-
+		if (ent->client->pers.doublejump == true)
+		{
+			if(ent->groundentity)
+			{
+				ent->client->pers.waitjump = true;
+				ent->client->pers.canjumpagain = true;
+			}
+		}
 		if (ent->deadflag)
 		{
 			client->ps.viewangles[ROLL] = 40;
@@ -1664,7 +1683,6 @@ void ClientThink (edict_t *ent, usercmd_t *ucmd)
 			VectorCopy (pm.viewangles, client->v_angle);
 			VectorCopy (pm.viewangles, client->ps.viewangles);
 		}
-
 		gi.linkentity (ent);
 
 		if (ent->movetype != MOVETYPE_NOCLIP)

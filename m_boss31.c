@@ -543,7 +543,9 @@ void jorg_dead (edict_t *self)
 #if 0
 	edict_t	*tempent;
 	/*
-	VectorSet (self->mins, -16, -16, -24);
+	
+	
+	(self->mins, -16, -16, -24);
 	VectorSet (self->maxs, 16, 16, -8);
 	*/
 	

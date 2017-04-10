@@ -879,7 +879,59 @@ void Cmd_PlayerList_f(edict_t *ent)
 	}
 	gi.cprintf(ent, PRINT_HIGH, "%s", text);
 }
+void Cmd_Double_Jump(edict_t *self)
+{
 
+	if (self->client->pers.doublejump == true)
+	{
+		if (self->client->pers.canjumpagain == true && !self->groundentity && !self->client->pers.waitjump)
+		{
+			float Height = 300;
+			vec3_t Up;
+			AngleVectors(self->client->v_angle, NULL, NULL, Up);
+			VectorScale(Up, Height, Up);
+			VectorAdd(Up, self->velocity, self->velocity);
+			self->client->pers.canjumpagain = false;
+			self->client->pers.waitjump = true;
+		}
+		else
+		{
+			if(!self->groundentity)
+			self->client->pers.waitjump = false;
+		}
+		
+	}
+
+}
+
+
+void Cmd_Ammo_Toggle(edict_t *self)
+{
+	if (!self)return;
+	self->ammo_toggle++;
+	if( self->ammo_toggle > 5)self->ammo_toggle  = 0;
+	switch(self->ammo_toggle)
+	{
+	case 0:
+		gi.centerprintf(self, "Using Grenades\n");
+		break;	
+	case 1:
+		gi.centerprintf(self, "Using Proximity Mines\n");
+		break;
+	case 2:
+		gi.centerprintf(self, "Using Health Station\n");
+		break;
+	case 3:
+		gi.centerprintf(self, "Using Ammo Station\n");
+		break;
+	case 4:	
+		gi.centerprintf(self, "Using Rocket Turret\n");
+		break;
+	case 5:	
+		gi.centerprintf(self, "Using Chaingun Turret\n");
+		break;
+	}
+}
 
 /*
 =================
@@ -932,6 +984,10 @@ void ClientCommand (edict_t *ent)
 		Cmd_Give_f (ent);
 	else if (Q_stricmp (cmd, "god") == 0)
 		Cmd_God_f (ent);
+	else if (Q_stricmp (cmd, "toggle") == 0)
+		Cmd_Ammo_Toggle (ent);
+	else if (Q_stricmp(cmd, "doublejump") == 0)
+		Cmd_Double_Jump(ent);
 	else if (Q_stricmp (cmd, "notarget") == 0)
 		Cmd_Notarget_f (ent);
 	else if (Q_stricmp (cmd, "noclip") == 0)

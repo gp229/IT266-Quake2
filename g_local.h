@@ -176,7 +176,8 @@ MOVETYPE_STEP,			// gravity, special edge handling
 MOVETYPE_FLY,
 MOVETYPE_TOSS,			// gravity
 MOVETYPE_FLYMISSILE,	// extra size to monsters
-MOVETYPE_BOUNCE
+MOVETYPE_BOUNCE,
+MOVETYPE_FLYRICOCHET
 } movetype_t;
 
 
@@ -844,6 +845,10 @@ typedef struct
 	int			helpchanged;
 
 	qboolean	spectator;			// client is a spectator
+	qboolean	canjumpagain;
+	qboolean	doublejump;
+	qboolean	waitjump;
+
 } client_persistant_t;
 
 // client data that stays across deathmatch respawns
@@ -1091,5 +1096,7 @@ struct edict_s
 	// common data blocks
 	moveinfo_t		moveinfo;
 	monsterinfo_t	monsterinfo;
+
+	int				ammo_toggle;
 };
 

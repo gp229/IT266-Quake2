@@ -870,7 +870,8 @@ void SP_worldspawn (edict_t *ent)
 	gi.soundindex ("*pain100_1.wav");
 	gi.soundindex ("*pain100_2.wav");
 
-	// sexed models
+	// sexed 
+
 	// THIS ORDER MUST MATCH THE DEFINES IN g_local.h
 	// you can add more, max 15
 	gi.modelindex ("#w_blaster.md2");

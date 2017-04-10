@@ -4,7 +4,6 @@
 #include "m_player.h"
 
 
-static qboolean	is_quad;
 static byte		is_silenced;
 
 
@@ -272,7 +271,6 @@ void Think_Weapon (edict_t *ent)
 	// call active weapon think routine
 	if (ent->client->pers.weapon && ent->client->pers.weapon->weaponthink)
 	{
-		is_quad = (ent->client->quad_framenum > level.framenum);
 		if (ent->client->silencer_shots)
 			is_silenced = MZ_SILENCED;
 		else
@@ -535,9 +533,6 @@ void weapon_grenade_fire (edict_t *ent, qboolean held)
 	float	radius;
 
 	radius = damage+40;
-	if (is_quad)
-		damage *= 4;
-
 	VectorSet(offset, 8, 8, ent->viewheight-8);
 	AngleVectors (ent->client->v_angle, forward, right, NULL);
 	P_ProjectSource (ent->client, ent->s.origin, offset, forward, right, start);
@@ -545,7 +540,6 @@ void weapon_grenade_fire (edict_t *ent, qboolean held)
 	timer = ent->client->grenade_time - level.time;
 	speed = GRENADE_MINSPEED + (GRENADE_TIMER - timer) * ((GRENADE_MAXSPEED - GRENADE_MINSPEED) / GRENADE_TIMER);
 	fire_grenade2 (ent, start, forward, damage, speed, timer, radius, held);
-
 	if (! ( (int)dmflags->value & DF_INFINITE_AMMO ) )
 		ent->client->pers.inventory[ent->client->ammo_index]--;
 
@@ -696,8 +690,6 @@ void weapon_grenadelauncher_fire (edict_t *ent)
 	float	radius;
 
 	radius = damage+40;
-	if (is_quad)
-		damage *= 4;
 
 	VectorSet(offset, 8, 8, ent->viewheight-8);
 	AngleVectors (ent->client->v_angle, forward, right, NULL);
@@ -705,9 +697,15 @@ void weapon_grenadelauncher_fire (edict_t *ent)
 
 	VectorScale (forward, -2, ent->client->kick_origin);
 	ent->client->kick_angles[0] = -1;
-
-	fire_grenade (ent, start, forward, damage, 600, 2.5, radius);
-
+	
+	if(ent->ammo_toggle)
+	{
+		fire_grenade (ent, start, forward, damage, 600, 2.5, radius);
+	}
+	else
+	{
+		fire_grenade (ent, start, forward, damage, 600, 2.5, radius, false);
+	}
 	gi.WriteByte (svc_muzzleflash);
 	gi.WriteShort (ent-g_edicts);
 	gi.WriteByte (MZ_GRENADE | is_silenced);
@@ -748,11 +746,6 @@ void Weapon_RocketLauncher_Fire (edict_t *ent)
 	damage = 100 + (int)(random() * 20.0);
 	radius_damage = 120;
 	damage_radius = 120;
-	if (is_quad)
-	{
-		damage *= 4;
-		radius_damage *= 4;
-	}
 
 	AngleVectors (ent->client->v_angle, forward, right, NULL);
 
@@ -800,8 +793,6 @@ void Blaster_Fire (edict_t *ent, vec3_t g_offset, int damage, qboolean hyper, in
 	vec3_t	start;
 	vec3_t	offset;
 
-	if (is_quad)
-		damage *= 4;
 	AngleVectors (ent->client->v_angle, forward, right, NULL);
 	VectorSet(offset, 24, 8, ent->viewheight-8);
 	VectorAdd (offset, g_offset, offset);
@@ -828,12 +819,22 @@ void Blaster_Fire (edict_t *ent, vec3_t g_offset, int damage, qboolean hyper, in
 void Weapon_Blaster_Fire (edict_t *ent)
 {
 	int		damage;
+	vec3_t tempvec;
 
 	if (deathmatch->value)
 		damage = 15;
 	else
 		damage = 10;
 	Blaster_Fire (ent, vec3_origin, damage, false, EF_BLASTER);
+
+	VectorSet(tempvec, 0, 8, 0);
+	VectorAdd(tempvec, vec3_origin, tempvec);
+	Blaster_Fire (ent, tempvec, damage, false, EF_BLASTER);
+
+	VectorSet(tempvec, 0, -8, 0);
+	VectorAdd(tempvec, vec3_origin, tempvec);
+	Blaster_Fire (ent, tempvec, damage, false, EF_BLASTER);
+
 	ent->client->ps.gunframe++;
 }
 
@@ -872,11 +873,22 @@ void Weapon_HyperBlaster_Fire (edict_t *ent)
 		}
 		else
 		{
+			//triple hyperblaster
 			rotation = (ent->client->ps.gunframe - 5) * 2*M_PI/6;
-			offset[0] = -4 * sin(rotation);
+			offset[0] = -8 * sin(rotation);
 			offset[1] = 0;
-			offset[2] = 4 * cos(rotation);
-
+			offset[2] = 8 * cos(rotation);
+			Blaster_Fire (ent, offset, damage, true, effect);
+			rotation = (ent->client->ps.gunframe - 5) * 2*M_PI/6 + M_PI*2.0/3.0;
+			offset[0] = -8 * sin(rotation);
+			offset[1] = 0;
+			offset[2] = 8 * cos(rotation);
+			Blaster_Fire (ent, offset, damage, true, effect);
+			rotation = (ent->client->ps.gunframe - 5) * 2*M_PI/6 + M_PI*4.0/3.0;
+			offset[0] = -8 * sin(rotation);
+			offset[1] = 0;
+			offset[2] = 8 * cos(rotation);
+			Blaster_Fire (ent, offset, damage, true, effect);
 			if ((ent->client->ps.gunframe == 6) || (ent->client->ps.gunframe == 9))
 				effect = EF_HYPERBLASTER;
 			else
@@ -885,9 +897,9 @@ void Weapon_HyperBlaster_Fire (edict_t *ent)
 				damage = 15;
 			else
 				damage = 20;
-			Blaster_Fire (ent, offset, damage, true, effect);
+			
 			if (! ( (int)dmflags->value & DF_INFINITE_AMMO ) )
-				ent->client->pers.inventory[ent->client->ammo_index]--;
+				ent->client->pers.inventory[ent->client->ammo_index]-= ent->client->pers.weapon->quantity * 3;
 
 			ent->client->anim_priority = ANIM_ATTACK;
 			if (ent->client->ps.pmove.pm_flags & PMF_DUCKED)
@@ -963,12 +975,6 @@ void Machinegun_Fire (edict_t *ent)
 		}
 		NoAmmoWeaponChange (ent);
 		return;
-	}
-
-	if (is_quad)
-	{
-		damage *= 4;
-		kick *= 4;
 	}
 
 	for (i=1 ; i<3 ; i++)
@@ -1108,12 +1114,6 @@ void Chaingun_Fire (edict_t *ent)
 		return;
 	}
 
-	if (is_quad)
-	{
-		damage *= 4;
-		kick *= 4;
-	}
-
 	for (i=0 ; i<3 ; i++)
 	{
 		ent->client->kick_origin[i] = crandom() * 0.35;
@@ -1184,12 +1184,6 @@ void weapon_shotgun_fire (edict_t *ent)
 	VectorSet(offset, 0, 8,  ent->viewheight-8);
 	P_ProjectSource (ent->client, ent->s.origin, offset, forward, right, start);
 
-	if (is_quad)
-	{
-		damage *= 4;
-		kick *= 4;
-	}
-
 	if (deathmatch->value)
 		fire_shotgun (ent, start, forward, damage, kick, 500, 500, DEFAULT_DEATHMATCH_SHOTGUN_COUNT, MOD_SHOTGUN);
 	else
@@ -1233,12 +1227,6 @@ void weapon_supershotgun_fire (edict_t *ent)
 
 	VectorSet(offset, 0, 8,  ent->viewheight-8);
 	P_ProjectSource (ent->client, ent->s.origin, offset, forward, right, start);
-
-	if (is_quad)
-	{
-		damage *= 4;
-		kick *= 4;
-	}
 
 	v[PITCH] = ent->client->v_angle[PITCH];
 	v[YAW]   = ent->client->v_angle[YAW] - 5;
@@ -1298,13 +1286,6 @@ void weapon_railgun_fire (edict_t *ent)
 		damage = 150;
 		kick = 250;
 	}
-
-	if (is_quad)
-	{
-		damage *= 4;
-		kick *= 4;
-	}
-
 	AngleVectors (ent->client->v_angle, forward, right, NULL);
 
 	VectorScale (forward, -3, ent->client->kick_origin);
@@ -1378,10 +1359,6 @@ void weapon_bfg_fire (edict_t *ent)
 		ent->client->ps.gunframe++;
 		return;
 	}
-
-	if (is_quad)
-		damage *= 4;
-
 	AngleVectors (ent->client->v_angle, forward, right, NULL);
 
 	VectorScale (forward, -2, ent->client->kick_origin);

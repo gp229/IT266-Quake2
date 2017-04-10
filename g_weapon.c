@@ -310,6 +310,7 @@ void blaster_touch (edict_t *self, edict_t *other, cplane_t *plane, csurface_t *
 	}
 	else
 	{
+		return;
 		gi.WriteByte (svc_temp_entity);
 		gi.WriteByte (TE_BLASTER);
 		gi.WritePosition (self->s.origin);
@@ -341,7 +342,7 @@ void fire_blaster (edict_t *self, vec3_t start, vec3_t dir, int damage, int spee
 	VectorCopy (start, bolt->s.old_origin);
 	vectoangles (dir, bolt->s.angles);
 	VectorScale (dir, speed, bolt->velocity);
-	bolt->movetype = MOVETYPE_FLYMISSILE;
+	bolt->movetype = MOVETYPE_FLYRICOCHET;
 	bolt->clipmask = MASK_SHOT;
 	bolt->solid = SOLID_BBOX;
 	bolt->s.effects |= effect;
@@ -380,12 +381,15 @@ static void Grenade_Explode (edict_t *ent)
 {
 	vec3_t		origin;
 	int			mod;
+	vec3_t		aimdir;
 
 	if (ent->owner->client)
+		//Checks if client is not null
 		PlayerNoise(ent->owner, ent->s.origin, PNOISE_IMPACT);
 
 	//FIXME: if we are onground then raise our Z just a bit since we are a point?
 	if (ent->enemy)
+		//Checks if enemy and damage them
 	{
 		float	points;
 		vec3_t	v;
@@ -429,7 +433,7 @@ static void Grenade_Explode (edict_t *ent)
 	}
 	gi.WritePosition (origin);
 	gi.multicast (ent->s.origin, MULTICAST_PHS);
-
+	//Delete itself
 	G_FreeEdict (ent);
 }
 
@@ -464,6 +468,228 @@ static void Grenade_Touch (edict_t *ent, edict_t *other, cplane_t *plane, csurfa
 	Grenade_Explode (ent);
 }
 
+static void proximity_think(edict_t *self)
+{
+	edict_t *enemies;
+
+	while ((enemies = findradius(enemies, self->s.origin, 75)) != NULL)
+	{
+		gi.centerprintf(self->owner, enemies->client->pers.netname);
+		if(strcmp(enemies->classname, "player") == 0 && enemies->health > 0 && visible(self,enemies))
+			self->think = Grenade_Explode;
+		else if (enemies->svflags & SVF_MONSTER && enemies->health > 0 && visible(self,enemies))
+			self->think = Grenade_Explode;
+		break;
+	}
+	self->nextthink = level.time + .1;
+}
+
+static void health_think(edict_t *self)
+{
+	edict_t *target;
+	edict_t *player = NULL;
+	target = findradius(NULL, self->s.origin, 100);
+	VectorSet(self->mins, -5, -5, 0);
+	VectorSet(self->maxs, 15, 19, 15);
+	self->mass = 2;
+	self->health = 10;
+	self->takedamage = DAMAGE_YES;
+	while (target)
+	{
+		if(strcmp(target->classname, "player") == 0 && target->health > 0 && visible(self,target))
+		{
+			player = target;
+		}
+		target = findradius(target, self->s.origin, 100);
+	}
+	if(self->wait > 0)
+	{
+		self->wait -= .1;
+		if(self->wait > 0)
+		{
+			gi.centerprintf(player, "Go away for %.2g seconds", self->wait);
+		}
+	}
+	if(self->wait <= 0 && player != NULL)
+	{	
+		if(player->max_health > 150)
+		{
+			player->max_health = player->max_health;
+		}
+		else
+		{
+			player->max_health = 150;
+		}
+		if(player->health > 150)
+		{
+			player->health = player->health;
+		}
+		else
+		{
+			player->health = 150;
+		}
+		gi.centerprintf(player, "Health replenished", self->wait);
+		self->wait = 10;
+	}
+	self->nextthink = level.time + .1;
+}
+
+static void ammo_think(edict_t *self)
+{
+	edict_t *target;
+	edict_t *player = NULL;
+	gitem_t		*it;
+	int			i;
+	target = findradius(NULL, self->s.origin, 100);
+	VectorSet(self->mins, -5, -5, 0);
+	VectorSet(self->maxs, 15, 19, 15);
+	self->mass = 2;
+	self->health = 10;
+	self->takedamage = DAMAGE_YES;
+	while (target)
+	{
+		if(strcmp(target->classname, "player") == 0 && target->health > 0 && visible(self,target))
+		{
+			player = target;
+		}
+		target = findradius(target, self->s.origin, 100);
+	}
+	if(self->wait > 0)
+	{
+		self->wait -= .1;
+		if(self->wait > 0)
+		{
+			gi.centerprintf(player, "Go away for %.2g seconds", self->wait);
+		}
+	}
+	if(self->wait <= 0 && player != NULL)
+	{	
+		//Give Shotgun + ammo
+		it = itemlist + 8;
+		Add_Ammo (player, it, 1);
+		it = itemlist + 18;
+		Add_Ammo (player, it, 25);
+		//Machine Gun + ammo
+		it = itemlist + 10;
+		Add_Ammo (player, it, 1);
+		it = itemlist + 19;
+		Add_Ammo (player, it, 100);
+		//Chaingun
+		it = itemlist + 11;
+		Add_Ammo (player, it, 1);
+		//Grenades
+		it = itemlist + 12;
+		Add_Ammo (player, it, 2);
+		//Railgun + ammo
+		it = itemlist + 16;
+		Add_Ammo (player, it, 1);
+		it = itemlist + 22;
+		Add_Ammo (player, it, 10);
+		self->wait = 10;
+	}
+	self->nextthink = level.time + .1;
+}
+static void turret_think(edict_t *self)
+{
+	edict_t *target;
+	edict_t *player = NULL;
+	vec3_t	start;
+	vec3_t	forward;
+	vec3_t	dir;
+	vec3_t	end;
+	trace_t trace;
+	float dist, time;
+	target = findradius(NULL, self->s.origin, 1000);
+	VectorSet(self->mins, -10, -10, -10);
+	VectorSet(self->maxs, 20, 25, 15);
+	self->mass = 2;
+	self->health = 10;
+	self->takedamage = DAMAGE_YES;
+	while (target)
+	{
+		if((strcmp(target->classname, "player") == 0 || (target->svflags & SVF_MONSTER)) && target->health > 0 && visible(self,target) && target != self->owner)
+		{
+			player = target;
+		}
+		target = findradius(target, self->s.origin, 1000);
+	}
+	if(self->wait > 0)
+	{
+		self->wait -= 1;
+	}
+	if(self->wait <= 0 && player != NULL)
+	{
+
+		VectorSubtract(player->s.origin, self->s.origin, dir);
+		VectorNormalize(dir);
+		AngleVectors(self->s.angles, forward, NULL, NULL);
+		VectorCopy(self->s.origin, start);
+		VectorCopy(player->s.origin, end);
+		end[2] += player->viewheight;
+		VectorSubtract(end, start, dir);
+		dist = VectorLength(dir);
+		time = dist /1000;
+		VectorMA(end, time, player->velocity, end);
+		VectorSubtract(end, start, dir);
+		VectorNormalize(dir);
+		trace = gi.trace(start, vec3_origin, vec3_origin, end, self, MASK_SHOT);
+		fire_rocket(self, start, dir, 50, 500,50, 15);
+		self->wait = 2;
+		//gi.centerprintf(self->owner, player->client->pers.netname);
+	}
+	self->nextthink = level.time + 1;
+}
+
+static void chaingun_turret_think(edict_t *self)
+{
+	edict_t *target;
+	edict_t *player = NULL;
+	vec3_t	start;
+	vec3_t	forward;
+	vec3_t	dir;
+	vec3_t	end;
+	float time,dist;
+	trace_t trace;
+
+	target = findradius(NULL, self->s.origin, 1000);
+	VectorSet(self->mins, -10, -10, -10);
+	VectorSet(self->maxs, 20, 25, 15);
+	self->mass = 2;
+	self->health = 10;
+	self->takedamage = DAMAGE_YES;
+	while (target)
+	{
+		if((strcmp(target->classname, "player") == 0 || (target->svflags & SVF_MONSTER)) && target->health > 0 && visible(self,target) && target != self->owner)
+		{
+			player = target;
+		}
+		target = findradius(target, self->s.origin, 1000);
+	}
+	if(player != NULL)
+	{
+		VectorSubtract(player->s.origin, self->s.origin, dir);
+		VectorNormalize(dir);
+		AngleVectors(self->s.angles, forward, NULL, NULL);
+		VectorCopy(self->s.origin, start);
+		VectorCopy(player->s.origin, end);
+		end[2] += player->viewheight;
+		VectorSubtract(end, start, dir);
+		dist = VectorLength(dir);
+		time = dist /1000;
+		VectorMA(end, time, player->velocity, end);
+		VectorSubtract(end, start, dir);
+		VectorNormalize(dir);
+		trace = gi.trace(start, vec3_origin, vec3_origin, end, self, MASK_SHOT);
+		fire_blaster(self, start, dir, 20, 750, EF_BLASTER, false);
+	}
+	self->nextthink = level.time + 1;
+}
+static void Grenade_Die (edict_t *self, edict_t *inflictor, edict_t *attacker, int damage, vec3_t point)
+{
+	self->takedamage = DAMAGE_NO;
+	self->nextthink = level.time + .1;
+	self->think = Grenade_Explode;
+}
 void fire_grenade (edict_t *self, vec3_t start, vec3_t aimdir, int damage, int speed, float timer, float damage_radius)
 {
 	edict_t	*grenade;
@@ -520,23 +746,61 @@ void fire_grenade2 (edict_t *self, vec3_t start, vec3_t aimdir, int damage, int 
 	VectorClear (grenade->maxs);
 	grenade->s.modelindex = gi.modelindex ("models/objects/grenade2/tris.md2");
 	grenade->owner = self;
-	grenade->touch = Grenade_Touch;
-	grenade->nextthink = level.time + timer;
-	grenade->think = Grenade_Explode;
+
+	switch(self->ammo_toggle)
+	{
+	case 0:
+		grenade->touch = Grenade_Touch;
+		grenade->nextthink = level.time + timer;
+		grenade->think = Grenade_Explode;
+		break;
+	case 1:
+		grenade->s.modelindex = gi.modelindex ("models/objects/grenade2/tris.md2");
+		grenade->nextthink = level.time + timer;
+		grenade->think = proximity_think;
+		break;
+	case 2:
+		grenade->s.modelindex = gi.modelindex ("models/items/keys/power/tris.md2");	
+		grenade->nextthink = level.time + timer;
+		grenade->think = health_think;
+		break;
+	case 3:
+		grenade->s.modelindex = gi.modelindex ("models/items/pack/tris.md2");
+		grenade->nextthink = level.time + timer;
+		grenade->think = ammo_think;
+		break;
+	case 4:
+		grenade->s.modelindex = gi.modelindex("models/items/ammo/nuke/tris.md2");
+		grenade->nextthink = level.time + timer;
+		grenade->think = turret_think;
+		break;
+	case 5:
+		grenade->s.modelindex = gi.modelindex("models/items/ammo/nuke/tris.md2");
+		grenade->nextthink = level.time + timer;
+		grenade->think = chaingun_turret_think;
+		break;
+	}
 	grenade->dmg = damage;
 	grenade->dmg_radius = damage_radius;
 	grenade->classname = "hgrenade";
 	if (held)
 		grenade->spawnflags = 3;
 	else
+	{
 		grenade->spawnflags = 1;
-	grenade->s.sound = gi.soundindex("weapons/hgrenc1b.wav");
-
+	}
 	if (timer <= 0.0)
 		Grenade_Explode (grenade);
 	else
 	{
 		gi.sound (self, CHAN_WEAPON, gi.soundindex ("weapons/hgrent1a.wav"), 1, ATTN_NORM, 0);
+		VectorSet(grenade->mins, -3, -3, 0);
+		VectorSet(grenade->maxs, 6, 6, 6);
+		grenade->mass = 2;
+		grenade->health	= 10;
+		grenade->die = Grenade_Die;
+		grenade->takedamage = DAMAGE_YES;
+		grenade->monsterinfo.aiflags = AI_NOSTEP;
 		gi.linkentity (grenade);
 	}
 }
